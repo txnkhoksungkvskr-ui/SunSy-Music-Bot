@@ -1,5 +1,19 @@
-import discord, yt_dlp, os
+import discord, yt_dlp, os, threading
 from discord.ext import commands
+from flask import Flask
+
+# ------------------ Flask (เปิดพอร์ตให้ Render) ------------------
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "SunSy Music Bot is running"
+
+def run_web():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+threading.Thread(target=run_web).start()
+# -----------------------------------------------------------------
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -77,8 +91,6 @@ async def play_next(i):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"ytsearch:{song}", download=False)["entries"][0]
 
-        print("Playing:", info["title"])
-
         source = await discord.FFmpegOpusAudio.from_probe(
             info["url"],
             before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
@@ -96,7 +108,7 @@ async def play_next(i):
 async def setup(ctx):
     embed = discord.Embed(
         title="🎵 SunSy MUSIC",
-        description="บอทเพลง Render (เสียงออกแน่นอน)",
+        description="Bot Render Web Service (เสียงออก)",
         color=0xffa500
     )
     embed.set_image(url=IMAGE_URL)
