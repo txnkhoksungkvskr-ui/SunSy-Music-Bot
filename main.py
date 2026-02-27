@@ -3,28 +3,36 @@ from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
-# --- ระบบ Keep Alive แก้ปัญหา "No open ports detected" ---
+# 1. ระบบ Keep Alive (กัน Render เตะบอท)
 app = Flask('')
 @app.route('/')
 def home(): return "SunSy Music is Online!"
-def run(): app.run(host='0.0.0.0', port=8080)
-Thread(target=run).start()
+Thread(target=lambda: app.run(host='0.0.0.0', port=8080)).start()
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 queues = {}
 
-# ลิงก์รูปภาพล่าสุดของพี่ครับ
-IMAGE_URL = "https://cdn.discordapp.com/attachments/1475182590557163550/1476900589056299182/ChatGPT_Image_27_.._2569_06_14_35.png?ex=69a2ce5b&is=69a17cdb&hm=31b8b15b3f09c28573943f36c43d82f86a96b39b0a01811a54df5775e9b4ce88&"
+# 2. ตั้งค่าการเล่นเพลง (ใช้ FFmpeg ตรงๆ)
+YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': True}
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn'
+}
 
 class MusicView(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="ADD", style=discord.ButtonStyle.primary, emoji="➕", custom_id="add_btn")
-    async def add(self, interaction: discord.Interaction, button: discord.ui.Button): await interaction.response.send_modal(SongModal())
-    @discord.ui.button(label="STOP", style=discord.ButtonStyle.danger, emoji="⏹️", custom_id="stop_btn")
+    def __init__(self):
+        super().__init__(timeout=None) # ห้ามตั้ง timeout เพื่อให้ปุ่มค้างตลอด
+
+    @discord.ui.button(label="ADD", style=discord.ButtonStyle.primary, emoji="➕", custom_id="add")
+    async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SongModal())
+
+    @discord.ui.button(label="STOP", style=discord.ButtonStyle.danger, emoji="⏹️", custom_id="stop")
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("หยุดและออกจากห้องแล้วครับ!", ephemeral=True)
+        if interaction.guild.voice_client:
+            await interaction.guild.voice_client.disconnect()
+            await interaction.response.send_message("หยุดและออกจากห้องแล้ว!", ephemeral=True)
 
 class SongModal(discord.ui.Modal, title='เพิ่มเพลง'):
     song = discord.ui.TextInput(label='พิมพ์ชื่อเพลงหรือลิงก์ YouTube')
@@ -40,26 +48,23 @@ class SongModal(discord.ui.Modal, title='เพิ่มเพลง'):
 
 async def play_next(interaction):
     if not queues.get(interaction.guild.id): return
-    song_query = queues[interaction.guild.id].pop(0)
-    with yt_dlp.YoutubeDL({'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True}) as ydl:
-        info = ydl.extract_info(f"ytsearch:{song_query}", download=False)['entries'][0]
+    song = queues[interaction.guild.id].pop(0)
+    with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        info = ydl.extract_info(f"ytsearch:{song}", download=False)['entries'][0]
     
-    # แก้ปัญหาเสียงไม่ออก: ใช้ executable="ffmpeg"
-    player = discord.FFmpegPCMAudio(info['url'], executable="ffmpeg", 
-                                    before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", 
-                                    options="-vn")
+    # ใช้ executable="ffmpeg" (ต้องมีใน Aptfile แล้ว)
+    player = discord.FFmpegPCMAudio(info['url'], executable="ffmpeg", **FFMPEG_OPTIONS)
     interaction.guild.voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(interaction)))
     await interaction.channel.send(f"🎵 กำลังเล่น: **{info['title']}**")
 
 @bot.command()
 async def setup(ctx):
-    embed = discord.Embed(title="🎵 SunSy MUSIC", description="กดปุ่มเพื่อสั่งการบอทได้เลยครับ", color=0xffa500)
-    embed.set_image(url=IMAGE_URL)
+    embed = discord.Embed(title="🎵 SunSy MUSIC", description="กดปุ่มเพื่อสั่งการบอทครับ", color=0xffa500)
     await ctx.send(embed=embed, view=MusicView())
 
 @bot.event
 async def on_ready():
-    bot.add_view(MusicView())
-    print(f'บอท {bot.user} พร้อมสวยแล้วครับพี่!')
+    bot.add_view(MusicView()) # คำสั่งนี้สำคัญมาก: โหลดปุ่มให้กลับมาทำงาน
+    print('บอทตื่นแล้ว!')
 
 bot.run(os.environ['DISCORD_TOKEN'])
