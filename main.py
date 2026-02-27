@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import yt_dlp
 import asyncio
+import os
 from flask import Flask
 from threading import Thread
 
@@ -68,9 +69,12 @@ async def play_next(interaction):
     if not interaction.guild.voice_client: await channel.connect()
     with yt_dlp.YoutubeDL({'format': 'bestaudio', 'noplaylist': True}) as ydl:
         info = ydl.extract_info(f"ytsearch:{song_query}", download=False)['entries'][0]
-    player = discord.FFmpegPCMAudio(info['url'], executable="ffmpeg.exe", 
+    
+    # --- แก้ไขจุดนี้: เปลี่ยนจาก ffmpeg.exe เป็น ffmpeg เฉยๆ ---
+    player = discord.FFmpegPCMAudio(info['url'], executable="ffmpeg", 
                                     before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", 
                                     options="-vn")
+    
     interaction.guild.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(interaction), bot.loop))
     await interaction.followup.send(f"กำลังเล่น: {info['title']}")
 
@@ -86,4 +90,5 @@ async def setup(ctx):
 
 # --- เปิดระบบ 24/7 ---
 keep_alive()
-bot.run("DISCORD_TOKEN")
+# --- แก้ไขจุดนี้: ดึง Token จาก Environment ---
+bot.run(os.environ['DISCORD_TOKEN'])
