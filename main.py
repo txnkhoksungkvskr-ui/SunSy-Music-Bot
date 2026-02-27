@@ -6,7 +6,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# --- ระบบ Keep Alive (ทำให้บอทออนไลน์ 24 ชม.) ---
+# --- ระบบ Keep Alive ---
 app = Flask('')
 @app.route('/')
 def home(): return "SunSy Music is Online 24/7!"
@@ -22,31 +22,31 @@ queues = {}
 
 class MusicView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=None)
+        super().__init__(timeout=None) # ตั้งค่าให้ปุ่มทำงานตลอดไป
 
-    @discord.ui.button(label="ADD", style=discord.ButtonStyle.primary, emoji="➕")
+    @discord.ui.button(label="ADD", style=discord.ButtonStyle.primary, emoji="➕", custom_id="btn_add")
     async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(SongModal())
 
-    @discord.ui.button(label="PAUSE", style=discord.ButtonStyle.secondary, emoji="⏸️")
+    @discord.ui.button(label="PAUSE", style=discord.ButtonStyle.secondary, emoji="⏸️", custom_id="btn_pause")
     async def pause(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
             interaction.guild.voice_client.pause()
             await interaction.response.send_message("หยุดชั่วคราว!", ephemeral=True)
 
-    @discord.ui.button(label="RESUME", style=discord.ButtonStyle.secondary, emoji="▶️")
+    @discord.ui.button(label="RESUME", style=discord.ButtonStyle.secondary, emoji="▶️", custom_id="btn_resume")
     async def resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.voice_client and interaction.guild.voice_client.is_paused():
             interaction.guild.voice_client.resume()
             await interaction.response.send_message("เล่นต่อแล้ว!", ephemeral=True)
 
-    @discord.ui.button(label="SKIP", style=discord.ButtonStyle.secondary, emoji="⏭️")
+    @discord.ui.button(label="SKIP", style=discord.ButtonStyle.secondary, emoji="⏭️", custom_id="btn_skip")
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.voice_client:
             interaction.guild.voice_client.stop()
             await interaction.response.send_message("ข้ามเพลงแล้ว!", ephemeral=True)
 
-    @discord.ui.button(label="STOP", style=discord.ButtonStyle.danger, emoji="⏹️")
+    @discord.ui.button(label="STOP", style=discord.ButtonStyle.danger, emoji="⏹️", custom_id="btn_stop")
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.voice_client:
             await interaction.guild.voice_client.disconnect()
@@ -70,7 +70,7 @@ async def play_next(interaction):
     with yt_dlp.YoutubeDL({'format': 'bestaudio', 'noplaylist': True}) as ydl:
         info = ydl.extract_info(f"ytsearch:{song_query}", download=False)['entries'][0]
     
-    # --- แก้ไขจุดนี้: เปลี่ยนจาก ffmpeg.exe เป็น ffmpeg เฉยๆ ---
+    # ใช้ executable="ffmpeg" (ต้องแน่ใจว่าติดตั้ง ffmpeg ใน Aptfile แล้ว)
     player = discord.FFmpegPCMAudio(info['url'], executable="ffmpeg", 
                                     before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", 
                                     options="-vn")
@@ -80,7 +80,7 @@ async def play_next(interaction):
 
 @bot.event
 async def on_ready():
-    bot.add_view(MusicView())
+    bot.add_view(MusicView()) # โหลดปุ่มแบบถาวร
     print(f'บอท {bot.user} พร้อมลุย 24 ชม. แล้วครับพี่!')
 
 @bot.command()
@@ -88,7 +88,5 @@ async def setup(ctx):
     embed = discord.Embed(title="🎵 SunSy MUSIC", description="บอทพร้อมทำงาน 24 ชม.", color=discord.Color.red())
     await ctx.send(embed=embed, view=MusicView())
 
-# --- เปิดระบบ 24/7 ---
 keep_alive()
-# --- แก้ไขจุดนี้: ดึง Token จาก Environment ---
 bot.run(os.environ['DISCORD_TOKEN'])
